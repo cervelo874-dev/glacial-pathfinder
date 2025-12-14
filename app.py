@@ -8,9 +8,56 @@ from core.utils import load_image, dilute_mask, resize_image_max_edge
 from core.inpainter import WatermarkRemover
 
 from streamlit_drawable_canvas import st_canvas
+import requests
+
+# Model Configuration
+MODEL_URL = "https://huggingface.co/smartywu/big-lama/resolve/main/big-lama.pt"
+MODEL_PATH = "models/big-lama.pt"
+
+def ensure_model_downloaded():
+    """Checks if model exists, downloads if not."""
+    if not os.path.exists(MODEL_PATH):
+        # Create dir if needed
+        os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+        
+        st.info("📥 Model file not found. Downloading 'big-lama.pt' (approx. 200MB)... This happens only once.")
+        
+        try:
+            with st.spinner("Downloading model... Please wait."):
+                response = requests.get(MODEL_URL, stream=True)
+                response.raise_for_status()
+                total_size = int(response.headers.get('content-length', 0))
+                
+                with open(MODEL_PATH, "wb") as f:
+                    downloaded = 0
+                    # Standard progress bar if we wanted, but spinner is fine for simplicity or st.progress
+                    progress_bar = st.progress(0)
+                    chunk_size = 1024 * 1024 # 1MB chunks
+                    
+                    for chunk in response.iter_content(chunk_size=chunk_size):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total_size > 0:
+                                progress_bar.progress(min(downloaded / total_size, 1.0))
+                    
+            st.success("✅ Download complete!")
+            st.rerun() # Refresh to clear the info message
+        except Exception as e:
+            st.error(f"❌ Failed to download model: {e}")
+            st.stop()
+    else:
+        # Check file size (sanity check)
+        if os.path.getsize(MODEL_PATH) < 1000:
+             st.warning("⚠️ Model file seems corrupted (too small). Re-downloading...")
+             os.remove(MODEL_PATH)
+             st.rerun()
 
 # Page config
 st.set_page_config(layout="wide", page_title="Watermark Remover AI")
+
+# Ensure Model is Ready
+ensure_model_downloaded()
 
 # Initialize Session State
 if "processed_image" not in st.session_state:
