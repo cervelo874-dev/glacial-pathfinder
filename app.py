@@ -9,7 +9,18 @@ from core.inpainter import WatermarkRemover
 
 # Monkey patch for streamlit-drawable-canvas compatibility
 import streamlit.elements.image
-from streamlit.elements.lib.image_utils import image_to_url as _internal_image_to_url
+
+# Try to find image_to_url
+if hasattr(streamlit.elements.image, "image_to_url"):
+    _internal_image_to_url = streamlit.elements.image.image_to_url
+else:
+    # Fallback for newer/different versions where it might be moved
+    try:
+        from streamlit.elements.lib.image_utils import image_to_url as _internal_image_to_url
+    except ImportError:
+        # Last resort fallback or simplified mock if needed. 
+        # For 1.37.0 it should be in streamlit.elements.image or similar.
+        _internal_image_to_url = None
 
 def shim_image_to_url(image, width, clamp, channels, output_format, image_id, allow_emoji=False):
     # Check if width is actually a LayoutConfig/object with width attribute
@@ -22,7 +33,7 @@ def shim_image_to_url(image, width, clamp, channels, output_format, image_id, al
         return _internal_image_to_url(image, MockLayout(width), clamp, channels, output_format, image_id)
 
 # Force patch
-if not hasattr(streamlit.elements.image, "image_to_url"):
+if hasattr(streamlit.elements.image, "image_to_url") and _internal_image_to_url:
     streamlit.elements.image.image_to_url = shim_image_to_url
 
 from streamlit_drawable_canvas import st_canvas
