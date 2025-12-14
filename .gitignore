@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Streamlit
+.streamlit/
+secrets.toml
+
+# Model files (Large)
+models/*.pt
+models/*.pth
+!models/.gitkeep
+
+# Environment
+.venv
+env/
+venv/

@@ -1,0 +1,9 @@
+streamlit
+torch
+torchvision
+opencv-python-headless
+Pillow
+numpy
+streamlit-drawable-canvas
+# onnxruntime if we decide to use ONNX, but for now we'll stick to torch as requested for "PyTorch framework" unless size is issue.
+# But for "big-lama", it's usually easier to run with standard torch if we have the weights.
