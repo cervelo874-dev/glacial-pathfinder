@@ -7,6 +7,24 @@ import os
 from core.utils import load_image, dilute_mask, resize_image_max_edge
 from core.inpainter import WatermarkRemover
 
+# Monkey patch for streamlit-drawable-canvas compatibility
+import streamlit.elements.image
+from streamlit.elements.lib.image_utils import image_to_url as _internal_image_to_url
+
+def shim_image_to_url(image, width, clamp, channels, output_format, image_id, allow_emoji=False):
+    # Check if width is actually a LayoutConfig/object with width attribute
+    if hasattr(width, "width"):
+        return _internal_image_to_url(image, width, clamp, channels, output_format, image_id)
+    else:
+        class MockLayout:
+            def __init__(self, w):
+                self.width = w
+        return _internal_image_to_url(image, MockLayout(width), clamp, channels, output_format, image_id)
+
+# Force patch
+if not hasattr(streamlit.elements.image, "image_to_url"):
+    streamlit.elements.image.image_to_url = shim_image_to_url
+
 from streamlit_drawable_canvas import st_canvas
 import requests
 
