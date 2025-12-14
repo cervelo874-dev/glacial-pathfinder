@@ -11,7 +11,7 @@ from streamlit_drawable_canvas import st_canvas
 import requests
 
 # Model Configuration
-MODEL_URL = "https://huggingface.co/smartywu/big-lama/resolve/main/big-lama.pt"
+MODEL_URL = "https://huggingface.co/fashn-ai/LaMa/resolve/main/big-lama.pt"
 MODEL_PATH = "models/big-lama.pt"
 
 def ensure_model_downloaded():
