@@ -122,8 +122,16 @@ if uploaded_file is not None or st.session_state.original_image is not None:
             canvas_height = h
             display_image = original_image
 
+        # Debug: Ensure standard mode
+        if display_image.mode != "RGB":
+            display_image = display_image.convert("RGB")
+
+        # Debug: Show image outside canvas to verify it loaded
+        st.write("Debug: Image Preview")
+        st.image(display_image, use_column_width=False, width=300)
+
         canvas_result = st_canvas(
-            fill_color="rgba(255, 255, 255, 1.0)",  # Drawing with white
+            fill_color="rgba(255, 255, 255, 1,0)",  # Drawing with white
             stroke_width=stroke_width,
             stroke_color="#fff",
             background_image=display_image,
