@@ -44,10 +44,12 @@ def ensure_model_downloaded():
                                 progress_bar.progress(min(downloaded / total_size, 1.0))
                     
             st.success("✅ Download complete!")
-            st.rerun() # Refresh to clear the info message
+            st.success("✅ Download complete!")
         except Exception as e:
             st.error(f"❌ Failed to download model: {e}")
             st.stop()
+        
+        st.rerun() # Refresh to clear the info message
     else:
         # Check file size (sanity check)
         if os.path.getsize(MODEL_PATH) < 1000:
