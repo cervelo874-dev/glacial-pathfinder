@@ -3,196 +3,131 @@ from PIL import Image
 import numpy as np
 import io
 import os
-
-from core.utils import load_image, dilute_mask, resize_image_max_edge
-from core.inpainter import WatermarkRemover
-
-from streamlit_drawable_canvas import st_canvas
 import requests
 
-# Model Configuration
+from streamlit_drawable_canvas import st_canvas
+from core.utils import load_image, dilute_mask
+from core.inpainter import WatermarkRemover
+
+# --- Configuration ---
 MODEL_URL = "https://huggingface.co/fashn-ai/LaMa/resolve/main/big-lama.pt"
 MODEL_PATH = "models/big-lama.pt"
 
-def ensure_model_downloaded():
-    """Checks if model exists, downloads if not."""
-    if not os.path.exists(MODEL_PATH):
-        # Create dir if needed
-        os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-        
-        st.info("📥 Model file not found. Downloading 'big-lama.pt' (approx. 200MB)... This happens only once.")
-        
-        try:
-            with st.spinner("Downloading model... Please wait."):
-                response = requests.get(MODEL_URL, stream=True)
-                response.raise_for_status()
-                total_size = int(response.headers.get('content-length', 0))
-                
-                with open(MODEL_PATH, "wb") as f:
-                    downloaded = 0
-                    progress_bar = st.progress(0)
-                    chunk_size = 1024 * 1024 # 1MB chunks
-                    
-                    for chunk in response.iter_content(chunk_size=chunk_size):
-                        if chunk:
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            if total_size > 0:
-                                progress_bar.progress(min(downloaded / total_size, 1.0))
-                    
-            st.success("✅ Download complete!")
-        except Exception as e:
-            st.error(f"❌ Failed to download model: {e}")
-            st.stop()
-        
-        st.rerun()
-    else:
-        # Check file size (sanity check)
-        if os.path.getsize(MODEL_PATH) < 1000:
-             st.warning("⚠️ Model file seems corrupted (too small). Re-downloading...")
-             os.remove(MODEL_PATH)
-             st.rerun()
-
-# Page config
 st.set_page_config(layout="wide", page_title="Watermark Remover AI")
 
-# Ensure Model is Ready
-ensure_model_downloaded()
+# --- Utils ---
+def ensure_model_ready():
+    """Downloads model if missing."""
+    if not os.path.exists(MODEL_PATH):
+        os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+        st.info("📥 Downloading AI Model (approx. 200MB)... This happens only once.")
+        try:
+            with st.spinner("Downloading..."):
+                resp = requests.get(MODEL_URL, stream=True)
+                resp.raise_for_status()
+                with open(MODEL_PATH, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=1024*1024):
+                        f.write(chunk)
+            st.success("✅ Model Ready!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Failed to download model: {e}")
+            st.stop()
+    elif os.path.getsize(MODEL_PATH) < 1000:
+        os.remove(MODEL_PATH)
+        st.experimental_rerun()
 
-# Initialize Session State
-if "processed_image" not in st.session_state:
-    st.session_state.processed_image = None
-if "original_image" not in st.session_state:
-    st.session_state.original_image = None
-if "current_file" not in st.session_state:
-    st.session_state.current_file = None
+# --- Main App ---
+ensure_model_ready()
 
-# Sidebar
-st.sidebar.title("Watermark Remover")
-st.sidebar.markdown("### Settings")
-stroke_width = st.sidebar.slider("Brush Width", 1, 50, 15)
-dilation_iterations = st.sidebar.slider("Mask Dilation", 0, 10, 2)
-use_tiling = st.sidebar.checkbox("Use Tiling (for large images)", value=True)
-tile_size = st.sidebar.number_input("Tile Size", value=1024, step=128)
-
-st.sidebar.markdown("---")
-st.sidebar.info("Model: LaMa (Big-LaMa)")
-
-# Main Interface
 st.title("💧 AI Watermark Remover")
 
+# Session State Initialization
+if "original_image" not in st.session_state:
+    st.session_state.original_image = None
+if "processed_image" not in st.session_state:
+    st.session_state.processed_image = None
+if "file_id" not in st.session_state:
+    st.session_state.file_id = None
+
+# Sidebar Controls
+with st.sidebar:
+    st.header("Settings")
+    stroke_width = st.slider("Brush Size", 5, 50, 20)
+    dilation = st.slider("Mask Expansion", 0, 10, 2)
+    st.info("Use the canvas to draw over watermarks.")
+
+# Main Layout
 uploaded_file = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "webp"])
 
-if uploaded_file is not None or st.session_state.original_image is not None:
-    # Handle File Load
-    # Check if new file uploaded
-    if uploaded_file is not None and (st.session_state.current_file != uploaded_file.name):
+if uploaded_file:
+    # Load logic: Only process if a new file is uploaded
+    file_id = uploaded_file.name + str(uploaded_file.size)
+    if st.session_state.file_id != file_id:
         try:
-            image = load_image(uploaded_file)
+            image = Image.open(uploaded_file).convert("RGB")
             st.session_state.original_image = image
-            st.session_state.current_file = uploaded_file.name
             st.session_state.processed_image = None
+            st.session_state.file_id = file_id
         except Exception as e:
-            st.error(f"Error loading image: {e}")
-            
-        # Removed st.rerun() to prevent loop/crash. 
-        # Streamlit will proceed to render the image below in the same pass.
+            st.error(f"Error loading file: {e}")
 
-    original_image = st.session_state.original_image
-    
-    if original_image:
-        w, h = original_image.size
+    # Display Canvas
+    if st.session_state.original_image:
+        original = st.session_state.original_image
+        w, h = original.size
         
-        st.write(f"Original Resolution: {w}x{h}")
-
-        # Canvas for Masking
-        st.subheader("1. Mark the Watermark")
-        st.markdown("Draw over the watermark/object you want to remove.")
-        
+        # Responsive Resizing
         display_width = 700
-        if w > display_width:
-            scale_factor = display_width / w
-            canvas_width = display_width
-            canvas_height = int(h * scale_factor)
-            display_image = original_image.resize((canvas_width, canvas_height))
-        else:
-            scale_factor = 1.0
-            canvas_width = w
-            canvas_height = h
-            display_image = original_image
-
+        canvas_width = min(w, display_width)
+        scale = canvas_width / w
+        canvas_height = int(h * scale)
+        
+        # Prepare background for canvas
+        bg_image = original.resize((canvas_width, canvas_height))
+        
+        st.subheader("1. Highlight Watermark")
+        
+        # Canvas
         canvas_result = st_canvas(
-            fill_color="rgba(255, 255, 255, 1.0)",  # Drawing with white
+            fill_color="rgba(255, 255, 255, 1.0)",
             stroke_width=stroke_width,
             stroke_color="#fff",
-            background_image=display_image,
+            background_image=bg_image,
             update_streamlit=True,
             height=canvas_height,
             width=canvas_width,
             drawing_mode="freedraw",
-            key=f"canvas_{st.session_state.current_file}", # Check reuse
+            key=f"canvas_{file_id}", # Unique key per file
         )
 
-        # Process Button
-        if st.button("🚀 Remove Watermark"):
+        if st.button("✨ Remove Watermark", type="primary"):
             if canvas_result.image_data is not None:
-                with st.spinner("Processing... This may take a moment."):
-                    # Get user drawn mask (RGBA)
-                    mask_data = canvas_result.image_data
-                    
-                    # This mask is at display resolution. Need to resize to original.
-                    mask_pil = Image.fromarray(mask_data.astype('uint8'), mode="RGBA")
-                    
-                    if scale_factor != 1.0:
-                        mask_pil = mask_pil.resize((w, h), Image.NEAREST)
+                with st.spinner("Removing watermark..."):
+                    # Get Alpha channel from canvas
+                    mask_data = canvas_result.image_data[:, :, 3] 
+                    mask_pil = Image.fromarray(mask_data).resize((w, h)) # Resize mask to match original
                     
                     # Dilation
-                    mask_dilated = dilute_mask(mask_pil, iterations=dilation_iterations)
+                    mask_dilated = dilute_mask(mask_pil, iterations=dilation)
                     
-                    # Inpaint
-                    remover = WatermarkRemover(model_path="models/big-lama.pt")
+                    # Inference
                     try:
-                        result = remover.process_image(
-                            original_image, 
-                            mask_dilated, 
-                            use_tiling=use_tiling,
-                            tile_size=tile_size
-                        )
+                        remover = WatermarkRemover(model_path=MODEL_PATH)
+                        # Simply calling process, ignoring tiling for simplicity/robustness first
+                        result = remover.process_image(original, mask_dilated, use_tiling=True)
                         st.session_state.processed_image = result
-                        st.success("Removal Complete!")
-                    except FileNotFoundError as e:
-                        st.error(str(e))
-                        st.info("💡 You need to place 'big-lama.pt' in the 'models/' directory.")
                     except Exception as e:
-                        st.error(f"An error occurred: {e}")
-            else:
-                 st.warning("Please draw on the image to select the area to remove.")
+                        st.error(f"Processing Error: {e}")
 
-        # Results
-        if st.session_state.processed_image is not None:
-             st.subheader("2. Result")
-             
-             col1, col2 = st.columns(2)
-             with col1:
-                 st.image(st.session_state.original_image, caption="Original", use_column_width=True)
-             with col2:
-                 st.image(st.session_state.processed_image, caption="Processed", use_column_width=True)
-             
-             # Download
-             buf = io.BytesIO()
-             st.session_state.processed_image.save(buf, format="PNG")
-             byte_im = buf.getvalue()
-             
-             st.download_button(
-                 label="Download Clean Image (PNG)",
-                 data=byte_im,
-                 file_name="cleaned_image.png",
-                 mime="image/png"
-             )
-
-else:
-    st.info("Please upload an image to start.")
-
-# Footer
-st.markdown("---")
-st.markdown("Created with ❤️ using LaMa and Streamlit")
+# Results Display
+if st.session_state.processed_image:
+    st.subheader("2. Result")
+    c1, c2 = st.columns(2)
+    c1.image(st.session_state.original_image, caption="Original", use_column_width=True)
+    c2.image(st.session_state.processed_image, caption="Cleaned", use_column_width=True)
+    
+    # Download
+    buf = io.BytesIO()
+    st.session_state.processed_image.save(buf, format="PNG")
+    st.download_button("📥 Download Result", buf.getvalue(), "cleaned.png", "image/png")
