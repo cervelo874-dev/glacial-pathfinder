@@ -87,19 +87,27 @@ if uploaded_file:
         bg_image = original.resize((canvas_width, canvas_height))
         
         st.subheader("1. Highlight Watermark")
+        st.write("Debug: Preparing canvas...") # Checkpoint 1
         
-        # Canvas
-        canvas_result = st_canvas(
-            fill_color="rgba(255, 255, 255, 1.0)",
-            stroke_width=stroke_width,
-            stroke_color="#fff",
-            background_image=bg_image,
-            update_streamlit=True,
-            height=canvas_height,
-            width=canvas_width,
-            drawing_mode="freedraw",
-            key=f"canvas_{file_id}", # Unique key per file
-        )
+        try:
+            # Canvas
+            canvas_result = st_canvas(
+                fill_color="rgba(255, 255, 255, 1.0)",
+                stroke_width=stroke_width,
+                stroke_color="#fff",
+                background_image=bg_image,
+                update_streamlit=True,
+                height=canvas_height,
+                width=canvas_width,
+                drawing_mode="freedraw",
+                key=f"canvas_{file_id}", # Unique key per file
+            )
+            st.write("Debug: Canvas rendered.") # Checkpoint 2
+        except Exception as e:
+            import traceback
+            st.error("🚨 Canvas Error!")
+            st.code(traceback.format_exc())
+            st.stop()
 
         if st.button("✨ Remove Watermark", type="primary"):
             if canvas_result.image_data is not None:
