@@ -122,17 +122,22 @@ if uploaded_file is not None or st.session_state.original_image is not None:
             canvas_height = h
             display_image = original_image
 
-        canvas_result = st_canvas(
-            fill_color="rgba(255, 255, 255, 1.0)",  # Drawing with white
-            stroke_width=stroke_width,
-            stroke_color="#fff",
-            background_image=display_image,
-            update_streamlit=True,
-            height=canvas_height,
-            width=canvas_width,
-            drawing_mode="freedraw",
-            key=f"canvas_{st.session_state.current_file}", # Check reuse
-        )
+        try:
+            canvas_result = st_canvas(
+                fill_color="rgba(255, 255, 255, 1.0)",  # Drawing with white
+                stroke_width=stroke_width,
+                stroke_color="#fff",
+                background_image=display_image,
+                update_streamlit=True,
+                height=canvas_height,
+                width=canvas_width,
+                drawing_mode="freedraw",
+                key=f"canvas_{st.session_state.current_file}", # Check reuse
+            )
+        except Exception as e:
+            st.error(f"Canvas Error: {e}")
+            st.code(f"{e}")
+            st.stop()
 
         # Process Button
         if st.button("🚀 Remove Watermark"):
