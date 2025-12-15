@@ -113,6 +113,10 @@ if uploaded_file:
                     # Dilation
                     mask_dilated = dilute_mask(mask_pil, iterations=dilation)
                     
+                    # Debug: Show Mask
+                    st.write("Debug: Processed Mask")
+                    st.image(mask_dilated, caption="The mask sent to AI (White = Remove)", width=300)
+
                     # Inference
                     try:
                         remover = WatermarkRemover(model_path=MODEL_PATH)
