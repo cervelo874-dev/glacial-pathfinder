@@ -92,12 +92,12 @@ if uploaded_file is not None or st.session_state.original_image is not None:
             st.session_state.original_image = image
             st.session_state.current_file = uploaded_file.name
             st.session_state.processed_image = None
+            st.success("✅ Log: Image Loaded Successfully") # Debug visual
         except Exception as e:
             st.error(f"Error loading image: {e}")
             
-        # Trigger rerun if we just loaded a new image successfully to refresh state
-        if st.session_state.original_image is not None and st.session_state.current_file == uploaded_file.name:
-             st.rerun()
+        # Removed st.rerun() to prevent loop/crash. 
+        # Streamlit will proceed to render the image below in the same pass.
 
     original_image = st.session_state.original_image
     
